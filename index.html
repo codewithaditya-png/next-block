@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#101512">
+<title>Next Block</title>
+<style>
+:root{color-scheme:dark;font:16px/1.5 system-ui,sans-serif;color:#f2f5e9;background:#101512;--panel:#171f1a;--line:#334137;--muted:#a8b7ab;--accent:#ddfa86}
+*{box-sizing:border-box}
+body{margin:0}
+main{width:min(960px,calc(100% - 36px));margin:auto;padding:clamp(30px,7vw,76px) 0 35px}
+header{margin-bottom:30px;border-bottom:1px solid var(--line);padding-bottom:28px}
+.brand{display:flex;align-items:center;gap:10px;color:var(--accent);font-weight:700}
+.brand span{display:grid;place-items:center;width:28px;height:28px;background:var(--accent);color:#182010;border-radius:8px}
+h1{font-size:clamp(2.6rem,8vw,5rem);line-height:1;letter-spacing:-.075em;margin:18px 0 10px}
+h2{font-size:1.25rem;letter-spacing:-.025em;margin:0}
+p{margin:0;color:var(--muted)}
+.grid{display:grid;grid-template-columns:1.05fr 1fr;gap:18px}
+.panel{min-width:0;background:var(--panel);border:1px solid var(--line);border-radius:22px;padding:clamp(16px,3vw,26px)}
+.timer-head,.tasks-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.modes,.actions,form{display:flex;gap:8px}
+button,input{font:inherit;min-width:0}
+button{cursor:pointer;min-height:42px;padding:8px 13px;border:1px solid var(--line);border-radius:10px;color:inherit;background:transparent}
+button:hover{background:#28362c}
+button[aria-pressed="true"]{color:var(--accent);border-color:#8ba750}
+.primary{background:var(--accent);border-color:var(--accent);color:#182010;font-weight:750}
+.primary:hover{background:#ebffb5}
+:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.dial{--remaining:100%;width:min(240px,90%);aspect-ratio:1;margin:28px auto;display:grid;place-items:center;border-radius:50%;background:conic-gradient(var(--accent) var(--remaining),var(--line) 0)}
+.dial-inner{display:grid;place-items:center;width:calc(100% - 14px);aspect-ratio:1;border-radius:50%;background:var(--panel)}
+#clock{font-size:clamp(2.1rem,7vw,3.4rem);font-weight:750;letter-spacing:-.07em;font-variant-numeric:tabular-nums}
+.actions{justify-content:center}
+#timer-status{text-align:center;margin-top:12px;min-height:24px}
+#task-count{font-size:.88rem}
+form{margin-top:18px}
+#task-name{flex:1;background:#101512;color:inherit;border:1px solid var(--line);border-radius:10px;padding:9px 11px}
+#tasks{list-style:none;padding:0;margin:16px 0 0}
+#tasks li{display:flex;justify-content:space-between;align-items:center;gap:8px;border-top:1px solid var(--line);padding:8px 0}
+#tasks label{display:flex;align-items:center;gap:10px;min-width:0;overflow-wrap:anywhere;cursor:pointer}
+#tasks input{accent-color:var(--accent);width:19px;height:19px;flex:none}
+#tasks input:checked + span{text-decoration:line-through;color:var(--muted)}
+.remove{flex:none;color:var(--muted);font-size:1.15rem;width:42px;padding:0}
+#empty{padding:16px 0}
+footer{color:var(--muted);font-size:.88rem;margin-top:20px}
+@media(max-width:680px){.grid{grid-template-columns:1fr}}
+@media(max-width:365px){.timer-head{align-items:flex-start;flex-direction:column}}
+</style>
+</head>
+<body>
+<main>
+<header>
+<div class="brand"><span aria-hidden="true">↗</span> Next Block</div>
+<h1>What will you focus on next?</h1>
+<p>Set one task, start the timer, and take a short break when it ends.</p>
+</header>
+<div class="grid">
+<section class="panel" aria-labelledby="timer-title">
+<div class="timer-head">
+<h2 id="timer-title">Timer</h2>
+<div class="modes" aria-label="Timer mode" role="group">
+<button type="button" data-minutes="25" aria-pressed="true">Focus</button>
+<button type="button" data-minutes="5" aria-pressed="false">Break</button>
+</div>
+</div>
+<div class="dial"><div class="dial-inner"><span id="clock" role="timer">25:00</span></div></div>
+<div class="actions"><button type="button" class="primary" id="start">Start</button><button type="button" id="reset">Reset</button></div>
+<p id="timer-status" role="status">25-minute focus session</p>
+</section>
+<section class="panel" aria-labelledby="tasks-title">
+<div class="tasks-head"><h2 id="tasks-title">Tasks</h2><p id="task-count" role="status">0 of 0 done</p></div>
+<form id="task-form">
+<input id="task-name" aria-label="New task" placeholder="e.g. Solve 10 maths questions" maxlength="100" required>
+<button class="primary" type="submit">Add</button>
+</form>
+<p id="empty">Add a task to get started.</p>
+<ul id="tasks"></ul>
+</section>
+</div>
+<footer id="storage-note">Tasks are saved in this browser.</footer>
+</main>
+<script>
+const clock = document.querySelector('#clock');
+const dial = document.querySelector('.dial');
+const start = document.querySelector('#start');
+const status = document.querySelector('#timer-status');
+const modes = document.querySelectorAll('[data-minutes]');
+let duration = 25 * 60 * 1000;
+let remaining = duration;
+let deadline = 0;
+let interval;
+
+function renderTimer() {
+  const seconds = Math.ceil(remaining / 1000);
+  const minutesText = String(Math.floor(seconds / 60)).padStart(2, '0');
+  const secondsText = String(seconds % 60).padStart(2, '0');
+  clock.textContent = minutesText + ':' + secondsText;
+  dial.style.setProperty('--remaining', (remaining / duration * 100) + '%');
+}
+function stopTimer() {
+  clearInterval(interval);
+  deadline = 0;
+  start.textContent = 'Start';
+}
+function tick() {
+  remaining = Math.max(0, deadline - Date.now());
+  renderTimer();
+  if (!remaining) {
+    stopTimer();
+    status.textContent = 'Session complete.';
+  }
+}
+function resetTimer() {
+  stopTimer();
+  remaining = duration;
+  status.textContent = duration === 1500000 ? '25-minute focus session' : '5-minute break';
+  renderTimer();
+}
+start.addEventListener('click', () => {
+  if (deadline) {
+    tick();
+    if (!remaining) return;
+    stopTimer();
+    start.textContent = 'Resume';
+    status.textContent = 'Paused';
+    return;
+  }
+  if (!remaining) remaining = duration;
+  deadline = Date.now() + remaining;
+  start.textContent = 'Pause';
+  status.textContent = duration === 1500000 ? 'Focus session running' : 'Break running';
+  interval = setInterval(tick, 200);
+  tick();
+});
+document.querySelector('#reset').addEventListener('click', resetTimer);
+modes.forEach(button => button.addEventListener('click', () => {
+  if (button.getAttribute('aria-pressed') === 'true') return;
+  modes.forEach(mode => mode.setAttribute('aria-pressed', String(mode === button)));
+  duration = Number(button.dataset.minutes) * 60 * 1000;
+  resetTimer();
+}));
+const list = document.querySelector('#tasks');
+const count = document.querySelector('#task-count');
+const input = document.querySelector('#task-name');
+const storageNote = document.querySelector('#storage-note');
+const storageKey = 'study-sprint.tasks.v1';
+let tasks = [];
+try {
+  const saved = JSON.parse(localStorage.getItem(storageKey) ?? '[]');
+  if (Array.isArray(saved)) {
+    tasks = saved.filter(task => task && typeof task.text === 'string' && typeof task.done === 'boolean');
+  }
+} catch {
+  storageNote.textContent = 'Saved tasks could not be loaded.';
+}
+function saveTasks() {
+  try {
+    localStorage.setItem(storageKey, JSON.stringify(tasks));
+    storageNote.textContent = 'Tasks are saved in this browser.';
+  } catch {
+    storageNote.textContent = 'Task storage is unavailable. Keep this tab open to keep your list.';
+  }
+}
+function renderCount() {
+  count.textContent = tasks.filter(task => task.done).length + ' of ' + tasks.length + ' done';
+  document.querySelector('#empty').hidden = tasks.length > 0;
+}
+function addRow(task) {
+  const row = document.createElement('li');
+  const label = document.createElement('label');
+  const checkbox = document.createElement('input');
+  checkbox.type = 'checkbox';
+  checkbox.checked = task.done;
+  const name = document.createElement('span');
+  name.textContent = task.text;
+  label.append(checkbox, name);
+  checkbox.addEventListener('change', () => {
+    task.done = checkbox.checked;
+    saveTasks();
+    renderCount();
+  });
+  const remove = document.createElement('button');
+  remove.type = 'button';
+  remove.className = 'remove';
+  remove.textContent = '×';
+  remove.setAttribute('aria-label', 'Remove ' + task.text);
+  remove.addEventListener('click', () => {
+    const next = row.nextElementSibling ?? row.previousElementSibling;
+    tasks.splice(tasks.indexOf(task), 1);
+    row.remove();
+    saveTasks();
+    renderCount();
+    (next?.querySelector('button') ?? input).focus();
+  });
+  row.append(label, remove);
+  list.append(row);
+}
+document.querySelector('#task-form').addEventListener('submit', event => {
+  event.preventDefault();
+  const name = input.value.trim();
+  if (!name) return;
+  const task = {text: name, done: false};
+  tasks.push(task);
+  addRow(task);
+  saveTasks();
+  renderCount();
+  input.value = '';
+  input.focus();
+});
+tasks.forEach(addRow);
+renderCount();
+</script>
+</body>
+</html>
