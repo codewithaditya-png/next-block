@@ -6,7 +6,9 @@ Next Block is a browser-based focus timer and task checklist. Pick a task, work 
 
 ## Try it
 
-Download or clone this repository and open `index.html` in a browser. There is no build step.
+**[Open the live demo](https://codewithaditya-png.github.io/next-block/)**
+
+To run it locally, download or clone this repository and open `index.html` in a browser. There is no build step.
 
 - **Focus and break modes** offer 25- and 5-minute sessions with start, pause, resume, and reset controls.
 - **Task checklist** lets you add, complete, and remove tasks.
